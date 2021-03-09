@@ -1,0 +1,479 @@
+<link href="/static/jquery.orgchart.css" media="all" rel="stylesheet" type="text/css" />
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.4.0/css/font-awesome.min.css">
+<body>
+    <div id="orgChart" class="orgChart vertical_render"></div>
+    <script src="http://code.jquery.com/jquery-1.11.1.min.js"></script>
+    <script>
+        $(function(){
+            $('#orgChart').orgChart();
+        });
+
+
+        // function
+        (function($) {
+
+            $.fn.orgChart = function(){
+                return new OrgChart($(this));
+            }
+
+            // 조직도 기능 만들기
+            function OrgChart(container){
+
+                let self = this;
+                let data = {{ data }};
+                let nodes = {};
+                let root_nodes = [];
+
+                // add_ajax
+                this.add_ajax = function(nodes){
+                    $.ajax({
+                        type : 'POST',
+                        url : '/add',
+                        data : JSON.stringify(nodes),
+                        contentType: "application/json",
+                        success : function(){
+                            return;
+                        }
+                    });
+                }
+
+                // del_ajax
+                this.del_ajax = function(id){
+                    $.ajax({
+                        type : 'POST',
+                        url : '/delete',
+                        data : JSON.stringify(id),
+                        contentType: "application/json",
+                        success : function(){
+                            return;
+                        }
+                    });
+                }
+
+                // edit_ajax
+                this.edit_ajax = function(nodes){
+                    $.ajax({
+                        type : 'POST',
+                        url : '/edit',
+                        data : JSON.stringify(nodes),
+                        contentType: "application/json",
+                        success : function(){
+                            return;
+                        }
+                    });
+                }
+
+                // icon_ajax
+                this.icon_ajax = function(nodes){
+                    $.ajax({
+                        type : 'POST',
+                        url : '/icon',
+                        data : JSON.stringify(nodes),
+                        contentType: "application/json",
+                        success : function(){
+                            return;
+                        }
+                    });
+                }
+
+                // 차트 그리기
+                this.draw = function(){
+
+                    // nodes render
+                    if(container.hasClass('horizontal_render')){
+                        container.empty().append(root_nodes[0].horizontal_render());
+                    }else if(container.hasClass('vertical_render')){
+                         container.empty().append("<ul>" + root_nodes[0].vertical_render() + "</ul>");
+                    }
+
+                    // 추가 버튼 클릭
+                    container.find('.org-add-button').click(function(e){
+                        let this_id = $(this).parent().parent().attr('node-id');
+                        let class_box = $(this).parent();
+
+                        // 새로운 노드 만들기
+                        self.newNode(this_id, class_box);
+                        e.stopPropagation();
+                    });
+
+                    // 삭제 버튼 클릭
+                    container.find('.org-del-button').click(function(e){
+                        let this_id = $(this).parent().parent().attr('node-id');
+                        let class_box = $(this).parent();
+
+                        // 노드 삭제
+                        if(this_id == 1){
+                            alert('첫 번째 노드는 삭제할 수 없습니다.');
+                        }else {
+                            self.deleteNode(this_id, class_box);
+                            e.stopPropagation();
+                        }
+                    });
+
+                    // 편집 버튼 클릭
+                    container.find('.org-edit-button').click(function(e){
+                        let this_id = $(this).parent().parent().attr('node-id');
+                        let class_box = $(this).parent();
+
+                        // 내용 텍스트 편집 시작
+                        self.startEdit(this_id, class_box);
+                        e.stopPropagation();
+                    });
+
+                    // 아이콘 편집 버튼 클릭
+                    container.find('.org-icon-button').click(function(e){
+                        let this_id = $(this).parent().parent().attr('node-id');
+                        let class_box = $(this).parent();
+
+                        // 내용 텍스트 편집 시작
+                        self.changeIcon(this_id, class_box);
+                        e.stopPropagation();
+                    });
+
+                    // 열기
+                    container.find('.open-close-button').click(function(){
+                        if($(this).parent().hasClass('open')){
+                            $(this).parent().removeClass('open');
+                        }else{
+                            container.find('.open-close-button').parent().removeClass('open');
+                            container.find('.node_top').removeClass('select');
+                            $(this).parent().addClass('open');
+                            $(this).parent().siblings('.node_top').addClass('select')
+
+                        }
+                    });
+
+                    // 선택
+                    container.find('.node_top').click(function(){
+                        if($(this).hasClass('select')){
+                            $(this).removeClass('select');
+                        }else{
+                            container.find('.node_top').removeClass('select');
+                            container.find('.open-close-button').parent().removeClass('open');
+                            $(this).addClass('select');
+                        }
+                    });
+                }
+
+                // 내용 텍스트 편집 시작
+                this.startEdit = function(id, class_box){
+
+                     container.find('div[node-id='+id+'] .node_top').addClass('select');
+
+                    // 편집 완료 함수
+                    let commitChange = function(){
+
+                        // 박스 닫기
+                        class_box.removeClass('open');
+
+                        // 엔터를 누르거나 blur일때 편집 완료
+                        let spanElement = $('<span class="text">' + nodes[id].data.name + '</span>');
+                        inputElement.replaceWith(spanElement);
+                        self.edit_ajax(nodes[id].data);
+
+                    }
+
+                    // span Element를 input Element로 변경
+                    let inputElement = $('<textarea class="org-input" onKeyUp="javascript:check_byte(this,\'17\')">' + nodes[id].data.name + '</textarea>');
+                    container.find('div[node-id='+id+'] .text').replaceWith(inputElement);
+
+                    // input Element Focus
+                    container.find('div[node-id='+id+'] textarea').focus(function(event){
+                        container.find('div[node-id='+id+'] .node_top').addClass('focus');
+                    })
+                    inputElement.focus();
+
+                    // Enter 누르면 편집 종료
+                    inputElement.keyup(function(event){
+                        if(event.which == 13){
+                            commitChange();
+                        }else{
+                            nodes[id].data.name = inputElement.val();
+                        }
+                    });
+
+                    // input Element Blur 했을 때
+                    inputElement.blur(function(event){
+                        container.find('div[node-id='+id+'] .node_top').removeClass('focus');
+                        commitChange();
+                    });
+                }
+
+                // 새로운 노드 만들기
+                this.newNode = function(parentId, class_box){
+
+                    // 박스 닫기
+                    class_box.removeClass('open');
+
+                    // 새롭게 만들어지는 노드 id값 생성
+                    let next_id = Object.keys(nodes).length;
+                    while(next_id in nodes){
+                        next_id++;
+                    }
+
+                    // 새롭게 만들어진 노드 추가하기
+                    setTimeout(() => self.addNode({id: next_id, name: '', parent: parentId, icon: 'fa fa-folder'}, class_box), 300)
+                    setTimeout(() => self.add_ajax({id: next_id, name: '', parent: parentId, icon: 'fa fa-folder'}, class_box), 300)
+
+                }
+
+                // 새롭게 만들어진 노드 추가하기
+                this.addNode = function(data, class_box){
+
+                    let new_node = new Node(data);
+                    nodes[data.id] = new_node;
+                    nodes[data.parent].addChild(new_node);
+                    self.draw();
+                    self.startEdit(data.id, class_box);
+                }
+
+                // 노드 삭제하기
+                this.deleteNode = function(id, class_box){
+
+                    // 박스 닫기
+                    class_box.removeClass('open');
+
+                    // Children Node가 존재 할 경우
+                    if(nodes[id].children.length > 0){
+                        alert('하위 노드가 존재합니다.');
+
+                    // Children Node가 존재하지 않을 경우
+                    }else{
+
+                        // 노드 삭제
+                        setTimeout(() => nodes[nodes[id].data.parent].removeChild(id), 300);
+                        setTimeout(() => delete nodes[id], 300);
+                        setTimeout(() => self.draw(), 300);
+                        setTimeout(() => self.del_ajax(id), 300);
+                    }
+                }
+
+                // 아이콘 바꾸기
+                this.changeIcon = function(id, class_box){
+
+                    // 편집 완료 함수
+                    let iconCommitChange = function(){
+
+                        // 박스 닫기
+                        class_box.removeClass('open');
+
+                        // 엔터를 눌렀을 때 편집 시작
+                        self.icon_ajax(nodes[id].data);
+                        setTimeout(() => self.draw(), 300);
+                        setTimeout(() => container.find('div[node-id='+id+'] .node_top').addClass('select'), 300);
+
+                    }
+
+                    // icon edit box 열기
+                    let inputElement = $('div[node-id='+id+'] .icon_edit_box input');
+                    container.find('div[node-id='+id+'] .icon_edit_box').addClass('icon_open');
+
+                    // input Element Focus
+                    inputElement.focus();
+
+                    // Enter 누르면 편집 종료
+                    inputElement.keyup(function(event){
+                        if(event.which == 13){
+                            iconCommitChange();
+                        }else{
+                            nodes[id].data.icon = inputElement.val();
+                        }
+                    });
+
+                    // input Element Blur 했을 때
+                    inputElement.blur(function(event){
+                        iconCommitChange();
+                    })
+
+                }
+
+                // nodes = new Node()
+                for(let i in data){
+                    nodes[data[i].id] = new Node(data[i]);
+                }
+
+                // Parent-Child 관계 적용
+                for(let i in nodes){
+                    if(nodes[i].data.parent === 0){
+                        root_nodes.push(nodes[i]);
+                    }else{
+                        nodes[nodes[i].data.parent].addChild(nodes[i]);
+                    }
+                }
+
+                // draw()
+                self.draw();
+            }
+
+            // 조직도 구조 만들기
+            function Node(data){
+                this.data = data;
+                this.children = [];
+                let self = this;
+
+                // 해당 data에 childNode 추가
+                this.addChild = function(childNode){
+                    this.children.push(childNode);
+                }
+
+                // 삭제할 id를 부모 id의 children 목록에서 삭제
+                this.removeChild = function(id){
+                    for(let i=0; i<self.children.length; i++){
+                        if(self.children[i].data.id == id){
+                            self.children.splice(i,1);
+                        }
+                    }
+                }
+
+                // horizontal_render
+                this.horizontal_render = function(){
+
+                    // 해당 id의 children 개수
+                    let childLength = self.children.length;
+
+                    // Parent Node의 Colspan 개수
+                    let nodeColspan = childLength > 0 ? 2*childLength : 2;
+
+                    // Main Table 변수 만들기
+                    let mainTable = "<table cellpadding='0' cellspacing='0' border='0' style='width: 100%;'>";
+
+                    // Sub Table 변수 만들기
+                    let subTable = "<table cellpadding='0' cellspacing='0' border='0' style='width: 100%;'>" +
+                                       "<tr class='lines x'>" +
+                                           "<td class='line left half'></td>" +
+                                           "<td class='line right half'></td>" +
+                                        "</tr>" +
+                                    "</table>";
+
+                    // Main Table 시작, 첫 번째 노드 만들기
+                    mainTable += "<tr>" +
+                                     "<td colspan='" + nodeColspan + "'>" + self.formatNode() + "</td>" +
+                                 "</tr>";
+
+                    // Sub Table을 담은 tr 배치
+                    if(childLength > 0){
+                        mainTable += "<tr class='lines'>" +
+                                         "<td colspan='" + childLength*2 + "'>" + subTable + "</td>" +
+                                     "</tr>";
+                    }
+
+                    // Cilde Node 개수에 따른 선 그리기
+                    let linesCols = '';
+                    for(let i=0; i<childLength; i++){
+                        if(childLength==1){
+                            linesCols += "<td class='line left half'></td>";
+                        }else if(i==0){
+                            linesCols += "<td class='line left'></td>";
+                        }else{
+                            linesCols += "<td class='line left top'></td>";
+                        }
+
+                        if(childLength==1){
+                            linesCols += "<td class='line right half'></td>";
+                        }else if(i==childLength-1){
+                            linesCols += "<td class='line right'></td>";
+                        }else{
+                            linesCols += "<td class='line right top'></td>";
+                        }
+                    }
+
+                    // Child Node 개수에 따른 선 그린 것들을 lines v에 넣고 lines 아래에 배치
+                    mainTable += "<tr class='lines v'>"+linesCols+"</tr>";
+
+                    // Child Node 추가
+                    mainTable += "<tr>";
+                    for(let i in self.children){
+                        mainTable += "<td colspan='2'>" + self.children[i].horizontal_render() + "</td>";
+                    }
+                    mainTable += "</tr>";
+
+                    // Main Table 태그 닫기
+                    mainTable += "</table>";
+
+                    // 만들어진 Main Table 리턴
+                    return mainTable;
+                }
+
+                // vertical_render
+                this.vertical_render = function(){
+
+                    // li와 하위 요소 node 만들기
+                    let mainLi = "<li>" + self.formatNode();
+
+                    // ul 태그
+                    mainLi += "<ul>";
+
+                    for(let i in self.children){
+                        mainLi += self.children[i].vertical_render();
+                    }
+
+                    // ul 태그 닫기
+                    mainLi += "</ul>";
+
+                    // Main Li 태그 닫기
+                    mainLi += "</li>";
+
+                    // 만들어진 Main Table 리턴
+                    return mainLi;
+                }
+
+                // 노드 내부 구조 만들기
+                this.formatNode = function(){
+                    let name =
+                        "<div class='node_top'>" +
+                            "<div>" +
+                                "<p><i class='" + self.data.icon + "' aria-hidden='true'></i></p>" +
+                                "<p><span class='text'>" + self.data.name + "</span></p>" +
+                            "</div>" +
+                        "</div>";
+
+                    let add_delete =
+                        "<div>" +
+                            "<div class='org-add-button' title='추가'><span class='ad'><i class='fa fa-plus' aria-hidden='true'></i></span></div>" +
+                            "<div class='org-del-button' title='삭제'><span class='ad'><i class='fa fa-minus' aria-hidden='true'></i></span></div>" +
+                            "<div class='org-edit-button' title='내용 편집'><span class='ad'><i class='fa fa-pencil' aria-hidden='true'></i></span></div>" +
+                            "<div class='org-icon-button' title='아이콘 편집'><span class='ad'><i class='fa fa-info' aria-hidden='true'></i></span></div>" +
+                            "<div class='open-close-button'><span class='arrow'>▼</span></div>" +
+                        "</div>";
+
+                    let icon_edit =
+                        "<div class='icon_edit_box'>" +
+                            "<input type='text' value='" + self.data.icon + "'>" +
+                        "</div>"
+
+                    return "<div class='node' node-id='" + self.data.id + "'>" + name + add_delete + icon_edit + "</div>";
+                }
+            }
+
+        })(jQuery);
+
+        // byte 수 제한
+        function check_byte(obj, maxByte){
+            let str = obj.value;
+            let str_len = str.length;
+            let rbyte = 0;
+            let rlen = 0;
+            let one_char = "";
+            let str2 = "";
+
+            for(let i=0; i<str_len; i++){
+                one_char = str.charAt(i);
+                if(escape(one_char).length > 4){
+                    rbyte += 2;
+                }else{
+                    rbyte++;
+                }
+
+                if(rbyte <= maxByte){
+                    rlen = i+1;
+                }
+             }
+
+             if(rbyte > maxByte){
+                str2 = str.substr(0,rlen);
+                obj.value = str2;
+                check_byte(obj, maxByte);
+             }
+        }
+    </script>
+</body>
