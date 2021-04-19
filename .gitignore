@@ -1,4 +1,6 @@
 *.log
 *.log.*
-
+.idea
 /venv
+views
+__pycache__
